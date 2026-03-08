@@ -9,7 +9,7 @@
       "_comment": "Node.js will be installed via nvm-windows for better version management"
     },
     "git": {
-      "version": "2.47.1",
+      "version": "2.53.0",
       "minimumVersion": "2.0.0",
       "_comment": "Git for Windows will be downloaded from GitHub releases"
     }

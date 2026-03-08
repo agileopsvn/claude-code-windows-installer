@@ -663,6 +663,14 @@ try {
         }
     }
 
+    # Ensure PowerShell execution policy allows Claude Code to run
+    $currentPolicy = Get-ExecutionPolicy -Scope CurrentUser
+    if ($currentPolicy -eq "Restricted" -or $currentPolicy -eq "Undefined") {
+        Write-ColoredOutput "Setting PowerShell execution policy to RemoteSigned for current user..." "Cyan"
+        Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
+        Write-ColoredOutput "Execution policy updated." "Green"
+    }
+
     # Install Claude Code
     Write-ColoredOutput ""
 
@@ -740,29 +748,6 @@ try {
         }
     }
 
-    # Handle Atlassian MCP server installation
-    Write-ColoredOutput ""
-
-    $mcpInstalled = $false
-    $atlassianMCPExists = Test-AtlassianMCP
-
-    if ($atlassianMCPExists) {
-        Write-ColoredOutput "Atlassian MCP server is already configured." "Green"
-        Write-ColoredOutput "This enables Claude Code to access Jira tickets and Confluence pages." "Gray"
-        $mcpInstalled = $true
-    } else {
-        Write-ColoredOutput "The installer can add the Atlassian MCP server to Claude Code." "Cyan"
-        Write-ColoredOutput "This enables access to Jira tickets and Confluence pages directly from Claude Code." "Gray"
-
-        if (Get-UserConfirmation "Would you like to add the Atlassian MCP server?" "Y") {
-            $mcpInstalled = Install-AtlassianMCP
-        } else {
-            Write-ColoredOutput "Skipping Atlassian MCP server installation." "Yellow"
-            Write-ColoredOutput "You can install it later by running this command in Git Bash:" "Gray"
-            Write-ColoredOutput "claude mcp add --transport sse atlassian -s user https://mcp.atlassian.com/v1/sse" "Cyan"
-        }
-    }
-
     # Success message
     Write-ColoredOutput ""
     Write-ColoredOutput "========================================" "Green"
@@ -783,11 +768,6 @@ try {
     Write-ColoredOutput "Important:" "Yellow"
     Write-ColoredOutput "The first time you open Claude Code, you'll be asked to select a color theme and authenticate." "Yellow"
     Write-ColoredOutput "Select #2 'Billing Account'. Your browser will open to login, use your Orases Google account to authenticate." "Yellow"
-    if ($mcpInstalled) {
-        Write-ColoredOutput ""
-        Write-ColoredOutput "You'll also be asked to authenticate with Atlassian to enable Jira and Confluence access." "Yellow"
-        Write-ColoredOutput "After opening claude, type `/mcp` and hit Enter" "Yellow"
-    }
     Write-ColoredOutput ""
     Write-ColoredOutput "Press any key to exit..." "White"
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")

@@ -197,16 +197,37 @@ function Install-Git {
         $gitUrl = $script:Config.urls.gitBase -replace '{version}', $gitConfig.version -replace '{arch}', $architecture
         $gitInstaller = "$env:TEMP\git-installer.exe"
 
-        Write-ColoredOutput "Downloading Git v$($gitConfig.version) for $architecture..." "Cyan"
-        Invoke-WebRequest -Uri $gitUrl -OutFile $gitInstaller -UseBasicParsing
+        # Try winget first (available on Windows 10 1709+ and Windows 11)
+        $wingetExists = Get-Command winget -ErrorAction SilentlyContinue
+        $gitInstalled = $false
 
-        Write-ColoredOutput "Installing Git..." "Cyan"
-        Write-ColoredOutput "Note: If installation fails, close all Git Bash windows and try again." "Gray"
+        if ($wingetExists) {
+            Write-ColoredOutput "Installing Git via winget..." "Cyan"
+            try {
+                $wingetResult = Start-Process -FilePath "winget" -ArgumentList "install", "--id", "Git.Git", "--accept-source-agreements", "--accept-package-agreements", "--silent" -Wait -PassThru -NoNewWindow
+                if ($wingetResult.ExitCode -eq 0) {
+                    $gitInstalled = $true
+                    Write-ColoredOutput "Git installed successfully via winget!" "Green"
+                } else {
+                    Write-ColoredOutput "winget install returned exit code $($wingetResult.ExitCode), falling back to direct download..." "Yellow"
+                }
+            } catch {
+                Write-ColoredOutput "winget failed: $($_.Exception.Message), falling back to direct download..." "Yellow"
+            }
+        }
 
-        $installProcess = Start-Process -FilePath $gitInstaller -ArgumentList "/VERYSILENT", "/NORESTART" -Wait -PassThru
+        if (-not $gitInstalled) {
+            Write-ColoredOutput "Downloading Git v$($gitConfig.version) for $architecture..." "Cyan"
+            Invoke-WebRequest -Uri $gitUrl -OutFile $gitInstaller -UseBasicParsing
 
-        if ($installProcess.ExitCode -ne 0) {
-            throw "Git installer failed with exit code $($installProcess.ExitCode). This often happens when Git processes are running."
+            Write-ColoredOutput "Installing Git..." "Cyan"
+            Write-ColoredOutput "Note: If installation fails, close all Git Bash windows and try again." "Gray"
+
+            $installProcess = Start-Process -FilePath $gitInstaller -ArgumentList "/VERYSILENT", "/NORESTART" -Wait -PassThru
+
+            if ($installProcess.ExitCode -ne 0) {
+                throw "Git installer failed with exit code $($installProcess.ExitCode). This often happens when Git processes are running."
+            }
         }
 
         # Add Git to PATH for current session
@@ -220,8 +241,8 @@ function Install-Git {
             $env:Path += ";$gitPath"
         }
 
-        Remove-Item $gitInstaller -Force
-        Write-ColoredOutput "Git v$($gitConfig.version) installed successfully!" "Green"
+        if (Test-Path $gitInstaller) { Remove-Item $gitInstaller -Force }
+        Write-ColoredOutput "Git installed successfully!" "Green"
     }
     catch {
         Write-ColoredOutput "Git installation failed: $($_.Exception.Message)" "Red"

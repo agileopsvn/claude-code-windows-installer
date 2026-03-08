@@ -6,7 +6,8 @@
 #   installer.ps1 -Debug             # Enable debug output for troubleshooting
 
 param(
-    [switch]$Debug
+    [switch]$Debug,
+    [switch]$Silent
 )
 
 # Load configuration from config.json
@@ -57,6 +58,10 @@ function Request-AdminPrivileges {
         if ($Debug) {
             $arguments += "-Debug"
             Write-DebugOutput "Adding -Debug parameter to elevated process"
+        }
+        if ($Silent) {
+            $arguments += "-Silent"
+            Write-DebugOutput "Adding -Silent parameter to elevated process"
         }
         
         Write-DebugOutput "Starting elevated process with arguments: $($arguments -join ' ')"
@@ -113,6 +118,11 @@ function Get-UserConfirmation {
         "$Message [Y/n] ($defaultText): "
     } else {
         "$Message [y/N] ($defaultText): "
+    }
+
+    if ($Silent) {
+        Write-Host "$Message -> Auto-accepting (silent mode)" -ForegroundColor Gray
+        return $true
     }
 
     do {
@@ -245,7 +255,12 @@ function Install-NodeJS {
         Invoke-WebRequest -Uri $nvmUrl -OutFile $nvmInstaller -UseBasicParsing
 
         Write-ColoredOutput "Installing nvm-windows..." "Cyan"
-        Start-Process -FilePath $nvmInstaller -ArgumentList "/S" -Wait
+        if ($Silent) {
+            Write-ColoredOutput "Running silent install (INNOSETUP /VERYSILENT)..." "Gray"
+            Start-Process -FilePath $nvmInstaller -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
+        } else {
+            Start-Process -FilePath $nvmInstaller -Wait
+        }
 
         # Add nvm to PATH for current session
         $nvmPath = "$env:APPDATA\nvm"
@@ -510,6 +525,9 @@ try {
     
     Write-DebugOutput "Admin privileges confirmed, continuing with installation..."
 
+    # Ensure TLS 1.2 is enabled (required for GitHub/npm downloads)
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+
     # Load configuration after admin check
     try {
         $script:Config = Get-InstallerConfig
@@ -571,6 +589,19 @@ try {
         Write-ColoredOutput "Git is already installed." "Green"
         if (Get-UserConfirmation "Would you like to reinstall Git anyway?" "N") {
             Install-Git
+        }
+    }
+
+    # Verify Git Bash is available (required for Claude Code)
+    $gitBashExists = (Test-Path "C:\Program Files\Git\bin\bash.exe") -or
+                     (Test-Path "C:\Program Files (x86)\Git\bin\bash.exe")
+    if (-not $gitBashExists) {
+        Write-ColoredOutput "Git Bash not found. Installing Git (includes Git Bash)..." "Yellow"
+        Install-Git
+        $gitBashExists = (Test-Path "C:\Program Files\Git\bin\bash.exe") -or
+                         (Test-Path "C:\Program Files (x86)\Git\bin\bash.exe")
+        if (-not $gitBashExists) {
+            Write-ColoredOutput "Warning: Git Bash still not available. Context menu and MCP features may not work." "Yellow"
         }
     }
 
@@ -639,15 +670,20 @@ try {
         Write-ColoredOutput "This adds 'Open with Claude Code' to folder right-click menus." "Gray"
 
         $userChoice = ""
-        do {
-            Write-Host "What would you like to do? " -NoNewline
-            Write-Host "[K]eep, [U]pdate, or [R]emove? [K/u/r]: " -NoNewline -ForegroundColor Cyan
-            $userChoice = Read-Host
-            if ([string]::IsNullOrWhiteSpace($userChoice)) {
-                $userChoice = "K"
-            }
-            $userChoice = $userChoice.Trim().ToUpper()
-        } while ($userChoice -notin @("K", "KEEP", "U", "UPDATE", "R", "REMOVE"))
+        if ($Silent) {
+            $userChoice = "U"
+            Write-Host "Auto-updating context menu (silent mode)" -ForegroundColor Gray
+        } else {
+            do {
+                Write-Host "What would you like to do? " -NoNewline
+                Write-Host "[K]eep, [U]pdate, or [R]emove? [K/u/r]: " -NoNewline -ForegroundColor Cyan
+                $userChoice = Read-Host
+                if ([string]::IsNullOrWhiteSpace($userChoice)) {
+                    $userChoice = "K"
+                }
+                $userChoice = $userChoice.Trim().ToUpper()
+            } while ($userChoice -notin @("K", "KEEP", "U", "UPDATE", "R", "REMOVE"))
+        }
 
         switch ($userChoice) {
             {$_ -in @("K", "KEEP")} {

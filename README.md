@@ -22,7 +22,7 @@ After installation, you can right-click any folder and select "Open with Claude 
 Open **Command Prompt** or **PowerShell** as Administrator and run:
 
 ```cmd
-curl -L "https://raw.githubusercontent.com/nitromike502/claude-code-windows-installer/main/install.bat" -o install.bat && install.bat
+curl -L "https://raw.githubusercontent.com/agileopsvn/claude-code-windows-installer/main/install.bat" -o install.bat && install.bat
 ```
 
 This single command will:
@@ -33,7 +33,7 @@ This single command will:
 
 **For troubleshooting download issues:**
 ```cmd
-curl -L "https://raw.githubusercontent.com/nitromike502/claude-code-windows-installer/main/install.bat" -o install.bat && install.bat -debug
+curl -L "https://raw.githubusercontent.com/agileopsvn/claude-code-windows-installer/main/install.bat" -o install.bat && install.bat -debug
 ```
 
 Debug mode provides detailed information about downloads, file paths, and installation steps.
@@ -43,7 +43,7 @@ Debug mode provides detailed information about downloads, file paths, and instal
 If you want to review the code or contribute:
 
 ```cmd
-git clone https://github.com/nitromike502/claude-code-windows-installer.git
+git clone https://github.com/agileopsvn/claude-code-windows-installer.git
 cd claude-code-windows-installer
 ```
 

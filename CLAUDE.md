@@ -275,10 +275,10 @@ Since this is a PowerShell/batch project, there are no traditional build command
 .\install.bat
 
 # Test single-command installation (download mode)
-curl -L "https://raw.githubusercontent.com/nitromike502/claude-code-windows-installer/main/install.bat" -o test-install.bat && test-install.bat
+curl -L "https://raw.githubusercontent.com/agileopsvn/claude-code-windows-installer/main/install.bat" -o test-install.bat && test-install.bat
 
 # Test single-command installation with debug mode
-curl -L "https://raw.githubusercontent.com/nitromike502/claude-code-windows-installer/main/install.bat" -o test-install.bat && test-install.bat -debug
+curl -L "https://raw.githubusercontent.com/agileopsvn/claude-code-windows-installer/main/install.bat" -o test-install.bat && test-install.bat -debug
 
 # Test interactive installation with existing dependencies
 .\src\installer.ps1

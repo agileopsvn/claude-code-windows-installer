@@ -4,19 +4,27 @@
 :: - Local mode: Uses files from cloned repository
 :: - Remote mode: Downloads latest files from GitHub
 :: 
-:: Usage: 
+:: Usage:
 ::   install.bat (from cloned repo or downloaded file)
 ::   curl -L "...install.bat" -o install.bat && install.bat (single command)
 ::   install.bat -debug (enable debug output)
+::   install.bat -silent (auto-accept all prompts)
+::   install.bat -y (shorthand for -silent)
 setlocal enabledelayedexpansion
 
-:: Check for debug argument
+:: Check for arguments
 set "DEBUG_MODE=false"
-if /i "%1"=="-debug" set "DEBUG_MODE=true"
-if /i "%1"=="--debug" set "DEBUG_MODE=true"
+set "SILENT_MODE=false"
+for %%A in (%*) do (
+    if /i "%%A"=="-debug" set "DEBUG_MODE=true"
+    if /i "%%A"=="--debug" set "DEBUG_MODE=true"
+    if /i "%%A"=="-silent" set "SILENT_MODE=true"
+    if /i "%%A"=="--silent" set "SILENT_MODE=true"
+    if /i "%%A"=="-y" set "SILENT_MODE=true"
+)
 
 :: Set GitHub repository base URL globally
-set "REPO_BASE=https://raw.githubusercontent.com/nitromike502/claude-code-windows-installer/main"
+set "REPO_BASE=https://raw.githubusercontent.com/agileopsvn/claude-code-windows-installer/main"
 
 echo ========================================
 echo      Claude Code Installer            
@@ -137,16 +145,19 @@ if "%DEBUG_MODE%"=="true" (
 )
 
 cd /d "!INSTALL_DIR!"
+:: Build PowerShell arguments
+set "PS_ARGS=-NoProfile -ExecutionPolicy Bypass -NoExit -File "!INSTALL_DIR!\src\installer.ps1""
+if "%DEBUG_MODE%"=="true" set "PS_ARGS=!PS_ARGS! -Debug"
+if "%SILENT_MODE%"=="true" set "PS_ARGS=!PS_ARGS! -Silent"
+
 if "%DEBUG_MODE%"=="true" (
     echo [DEBUG] Changed to directory: !CD!
-    echo [DEBUG] About to run PowerShell installer with debug mode...
-    echo [DEBUG] Full command: PowerShell -NoProfile -ExecutionPolicy Bypass -NoExit -File "!INSTALL_DIR!\src\installer.ps1" -Debug
+    echo [DEBUG] About to run PowerShell installer...
+    echo [DEBUG] Full command: PowerShell !PS_ARGS!
     echo [DEBUG] Press any key to continue...
     pause > nul
-    PowerShell -NoProfile -ExecutionPolicy Bypass -NoExit -File "!INSTALL_DIR!\src\installer.ps1" -Debug
-) else (
-    PowerShell -NoProfile -ExecutionPolicy Bypass -NoExit -File "!INSTALL_DIR!\src\installer.ps1"
 )
+PowerShell !PS_ARGS!
 
 :cleanup
 if "%LOCAL_MODE%"=="false" (

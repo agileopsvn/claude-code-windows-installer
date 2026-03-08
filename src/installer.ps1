@@ -276,12 +276,8 @@ function Install-NodeJS {
         Invoke-WebRequest -Uri $nvmUrl -OutFile $nvmInstaller -UseBasicParsing
 
         Write-ColoredOutput "Installing nvm-windows..." "Cyan"
-        if ($Silent) {
-            Write-ColoredOutput "Running silent install (INNOSETUP /VERYSILENT)..." "Gray"
-            Start-Process -FilePath $nvmInstaller -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
-        } else {
-            Start-Process -FilePath $nvmInstaller -Wait
-        }
+        Write-ColoredOutput "Running nvm-windows installer..." "Gray"
+        Start-Process -FilePath $nvmInstaller -ArgumentList "/S" -Wait
 
         # Add nvm to PATH for current session
         $nvmPath = "$env:APPDATA\nvm"
@@ -634,7 +630,7 @@ try {
         if ($nvmExists) {
             $nodeVersion = $script:Config.dependencies.nodejs.version
             Write-ColoredOutput "nvm is installed but needs Node.js v$nodeVersion." "Yellow"
-            if (Get-UserConfirmation "Install Node.js v$nodeVersion via nvm?" "N") {
+            if (Get-UserConfirmation "Install Node.js v$nodeVersion via nvm?" "Y") {
                 # Just install Node.js via existing nvm
                 try {
                     $nvmExe = Get-Command nvm -ErrorAction SilentlyContinue

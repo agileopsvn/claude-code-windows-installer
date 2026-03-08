@@ -146,18 +146,18 @@ if "%DEBUG_MODE%"=="true" (
 
 cd /d "!INSTALL_DIR!"
 :: Build PowerShell arguments
-set "PS_ARGS=-NoProfile -ExecutionPolicy Bypass -NoExit -File "!INSTALL_DIR!\src\installer.ps1""
-if "%DEBUG_MODE%"=="true" set "PS_ARGS=!PS_ARGS! -Debug"
-if "%SILENT_MODE%"=="true" set "PS_ARGS=!PS_ARGS! -Silent"
+set "PS_EXTRA="
+if "%DEBUG_MODE%"=="true" set "PS_EXTRA=!PS_EXTRA! -Debug"
+if "%SILENT_MODE%"=="true" set "PS_EXTRA=!PS_EXTRA! -Silent"
 
 if "%DEBUG_MODE%"=="true" (
     echo [DEBUG] Changed to directory: !CD!
     echo [DEBUG] About to run PowerShell installer...
-    echo [DEBUG] Full command: PowerShell !PS_ARGS!
+    echo [DEBUG] Extra args: !PS_EXTRA!
     echo [DEBUG] Press any key to continue...
     pause > nul
 )
-PowerShell !PS_ARGS!
+PowerShell -NoProfile -ExecutionPolicy Bypass -NoExit -File "!INSTALL_DIR!\src\installer.ps1" !PS_EXTRA!
 
 :cleanup
 if "%LOCAL_MODE%"=="false" (

@@ -667,8 +667,13 @@ try {
     $currentPolicy = Get-ExecutionPolicy -Scope CurrentUser
     if ($currentPolicy -eq "Restricted" -or $currentPolicy -eq "Undefined") {
         Write-ColoredOutput "Setting PowerShell execution policy to RemoteSigned for current user..." "Cyan"
-        Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
-        Write-ColoredOutput "Execution policy updated." "Green"
+        try {
+            Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
+            Write-ColoredOutput "Execution policy updated." "Green"
+        } catch {
+            Write-ColoredOutput "Could not set execution policy automatically." "Yellow"
+            Write-ColoredOutput "Run this manually in PowerShell: Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned" "Yellow"
+        }
     }
 
     # Install Claude Code

@@ -681,6 +681,21 @@ try {
         }
     }
 
+    # Ensure node/npm is on PATH (nvm use creates the symlink)
+    $nodeCheck = Get-Command node -ErrorAction SilentlyContinue
+    $npmCheck = Get-Command npm -ErrorAction SilentlyContinue
+    if ((-not $nodeCheck -or -not $npmCheck) -and (Get-Command nvm -ErrorAction SilentlyContinue)) {
+        $nodeVersion = $script:Config.dependencies.nodejs.version
+        Write-ColoredOutput "Activating Node.js v$nodeVersion via nvm..." "Cyan"
+        Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "nvm", "use", $nodeVersion -Wait -NoNewWindow
+        # Refresh PATH with nvm symlink
+        $nvmSymlink = [Environment]::GetEnvironmentVariable("NVM_SYMLINK", "User")
+        if (-not $nvmSymlink) { $nvmSymlink = "$env:ProgramFiles\nodejs" }
+        if ($env:Path -notlike "*$nvmSymlink*") {
+            $env:Path += ";$nvmSymlink"
+        }
+    }
+
     # Ensure PowerShell execution policy allows Claude Code to run
     $currentPolicy = Get-ExecutionPolicy -Scope CurrentUser
     if ($currentPolicy -eq "Restricted" -or $currentPolicy -eq "Undefined") {

@@ -289,9 +289,9 @@ function Install-NodeJS {
         $settingsContent = "root: $nvmInstallDir`r`npath: $nvmSymlink`r`narch: 64`r`nproxy: none"
         Set-Content -Path "$nvmInstallDir\settings.txt" -Value $settingsContent
 
-        # Create symlink directory if it doesn't exist
-        if (-not (Test-Path $nvmSymlink)) {
-            New-Item -ItemType Directory -Path $nvmSymlink -Force | Out-Null
+        # Remove existing nodejs directory if it's a real directory (nvm needs to create it as a symlink)
+        if ((Test-Path $nvmSymlink) -and -not ((Get-Item $nvmSymlink).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            Remove-Item $nvmSymlink -Recurse -Force
         }
 
         # Set environment variables permanently

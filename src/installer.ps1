@@ -270,29 +270,51 @@ function Install-NodeJS {
         Write-ColoredOutput "Installing nvm-windows (Node Version Manager)..." "Cyan"
 
         $nvmUrl = $script:Config.urls.nvmWindows
-        $nvmInstaller = "$env:TEMP\nvm-setup.exe"
+        $nvmZip = "$env:TEMP\nvm-noinstall.zip"
+        $nvmInstallDir = "$env:APPDATA\nvm"
+        $nvmSymlink = "$env:ProgramFiles\nodejs"
 
-        Write-ColoredOutput "Downloading nvm-windows..." "Cyan"
-        Invoke-WebRequest -Uri $nvmUrl -OutFile $nvmInstaller -UseBasicParsing
+        Write-ColoredOutput "Downloading nvm-windows (noinstall)..." "Cyan"
+        Invoke-WebRequest -Uri $nvmUrl -OutFile $nvmZip -UseBasicParsing
 
         Write-ColoredOutput "Installing nvm-windows..." "Cyan"
-        Write-ColoredOutput "Running nvm-windows installer..." "Gray"
-        Start-Process -FilePath $nvmInstaller -ArgumentList "/S" -Wait
 
-        # Add nvm to PATH for current session
-        $nvmPath = "$env:APPDATA\nvm"
-        if (Test-Path $nvmPath) {
-            $env:Path += ";$nvmPath"
+        # Create nvm directory and extract
+        if (-not (Test-Path $nvmInstallDir)) {
+            New-Item -ItemType Directory -Path $nvmInstallDir -Force | Out-Null
+        }
+        Expand-Archive -Path $nvmZip -DestinationPath $nvmInstallDir -Force
+
+        # Create settings file
+        $settingsContent = "root: $nvmInstallDir`r`npath: $nvmSymlink`r`narch: 64`r`nproxy: none"
+        Set-Content -Path "$nvmInstallDir\settings.txt" -Value $settingsContent
+
+        # Create symlink directory if it doesn't exist
+        if (-not (Test-Path $nvmSymlink)) {
+            New-Item -ItemType Directory -Path $nvmSymlink -Force | Out-Null
         }
 
-        # Refresh environment variables
-        $env:NVM_HOME = "$env:APPDATA\nvm"
-        $env:NVM_SYMLINK = "$env:ProgramFiles\nodejs"
+        # Set environment variables permanently
+        [Environment]::SetEnvironmentVariable("NVM_HOME", $nvmInstallDir, "User")
+        [Environment]::SetEnvironmentVariable("NVM_SYMLINK", $nvmSymlink, "User")
 
-        Remove-Item $nvmInstaller -Force
+        # Update system PATH permanently
+        $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+        $pathsToAdd = @($nvmInstallDir, $nvmSymlink)
+        foreach ($p in $pathsToAdd) {
+            if ($userPath -notlike "*$p*") {
+                $userPath = "$userPath;$p"
+            }
+        }
+        [Environment]::SetEnvironmentVariable("Path", $userPath, "User")
 
-        # Wait a moment for installation to complete
-        Start-Sleep -Seconds 3
+        # Update current session
+        $env:NVM_HOME = $nvmInstallDir
+        $env:NVM_SYMLINK = $nvmSymlink
+        $env:Path += ";$nvmInstallDir;$nvmSymlink"
+
+        Remove-Item $nvmZip -Force
+        Write-ColoredOutput "nvm-windows installed successfully!" "Green"
 
         # Now install Node.js using version from config
         $nodeConfig = $script:Config.dependencies.nodejs

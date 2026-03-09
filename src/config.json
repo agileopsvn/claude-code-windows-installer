@@ -23,7 +23,7 @@
   },
   
   "urls": {
-    "nvmWindows": "https://github.com/coreybutler/nvm-windows/releases/latest/download/nvm-setup.exe",
+    "nvmWindows": "https://github.com/coreybutler/nvm-windows/releases/latest/download/nvm-noinstall.zip",
     "gitBase": "https://github.com/git-for-windows/git/releases/download/v{version}.windows.1/Git-{version}-{arch}.exe",
     "_comment": "URL templates. {version} and {arch} will be replaced with actual values during installation"
   }

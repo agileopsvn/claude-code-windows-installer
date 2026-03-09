@@ -197,7 +197,7 @@ if "%USE_POWERSHELL%"=="true" (
     :: Use curl
     if "%DEBUG_MODE%"=="true" echo [DEBUG] Using curl...
     if "%DEBUG_MODE%"=="true" (
-        curl -L -v -o "!dest!" "!url!" 2>&1
+        curl -L --ssl-no-revoke -v -o "!dest!" "!url!" 2>&1
         set "download_result=!errorlevel!"
         echo [DEBUG] curl exit code: !download_result!
         if exist "!dest!" (
@@ -207,7 +207,7 @@ if "%USE_POWERSHELL%"=="true" (
             echo [DEBUG] File was not created
         )
     ) else (
-        curl -L -s -o "!dest!" "!url!"
+        curl -L --ssl-no-revoke -s -o "!dest!" "!url!"
         set "download_result=!errorlevel!"
     )
     exit /b !download_result!

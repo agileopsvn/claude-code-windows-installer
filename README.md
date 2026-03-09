@@ -22,18 +22,18 @@ After installation, you can right-click any folder and select "Open with Claude 
 Open **Command Prompt** or **PowerShell** as Administrator and run:
 
 ```cmd
-curl -L "https://raw.githubusercontent.com/agileopsvn/claude-code-windows-installer/main/install.bat" -o install.bat && install.bat
+curl -L --ssl-no-revoke "https://raw.githubusercontent.com/agileopsvn/claude-code-windows-installer/main/install.bat" -o install.bat && install.bat
 ```
 
 This single command will:
 - Download the installer automatically
-- Fetch all required files from the repository  
+- Fetch all required files from the repository
 - Run the complete installation process
 - Clean up temporary files when done
 
 **For troubleshooting download issues:**
 ```cmd
-curl -L "https://raw.githubusercontent.com/agileopsvn/claude-code-windows-installer/main/install.bat" -o install.bat && install.bat -debug
+curl -L --ssl-no-revoke "https://raw.githubusercontent.com/agileopsvn/claude-code-windows-installer/main/install.bat" -o install.bat && install.bat -debug
 ```
 
 Debug mode provides detailed information about downloads, file paths, and installation steps.
@@ -100,6 +100,11 @@ Debug mode provides comprehensive troubleshooting information including:
 - Corporate firewalls may block GitHub raw content
 - Some Windows systems lack curl (installer automatically falls back to PowerShell)
 - SSL/TLS certificate issues in corporate environments
+
+**SSL Certificate Revocation Errors (`CRYPT_E_NO_REVOCATION_CHECK`):**
+- The installer's curl commands already include `--ssl-no-revoke` to handle this
+- For the initial download command, use `curl -L --ssl-no-revoke "..."` as shown in Quick Install
+- Alternatively, use PowerShell instead: `Invoke-WebRequest -Uri "..." -OutFile install.bat; .\install.bat`
 
 **Admin Privilege Issues:**
 - Always run from an Administrator command prompt for best results

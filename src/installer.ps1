@@ -434,13 +434,19 @@ function Install-MarkerPdf {
     Write-ColoredOutput "Installing marker-pdf[full]..." "Cyan"
 
     try {
-        # Resolve python executable - prefer pyenv shim, fall back to PATH
+        # Resolve python executable - prefer pyenv shim, reject Windows Store stub
         $pyenvPython = "$env:USERPROFILE\.pyenv\pyenv-win\shims\python.exe"
-        $pythonExe = if (Test-Path $pyenvPython) {
-            $pyenvPython
+        $pythonExe = $null
+        if (Test-Path $pyenvPython) {
+            $pythonExe = $pyenvPython
         } else {
             $cmd = Get-Command python -ErrorAction SilentlyContinue
-            if ($cmd) { $cmd.Source } else { throw "python not found. Ensure pyenv installed Python successfully." }
+            if ($cmd -and $cmd.Source -notlike "*WindowsApps*") {
+                $pythonExe = $cmd.Source
+            }
+        }
+        if (-not $pythonExe) {
+            throw "Python not found via pyenv shims. Ensure pyenv installed Python $($script:Config.dependencies.python.version) successfully (check 'pyenv install --list' for available versions)."
         }
 
         Write-ColoredOutput "Using Python: $pythonExe" "Gray"
@@ -835,8 +841,23 @@ try {
             $pyenvHome = "$env:USERPROFILE\.pyenv\pyenv-win"
             $pyenvExe = "$pyenvHome\bin\pyenv.bat"
             if (-not (Test-Path $pyenvExe)) { $pyenvExe = (Get-Command pyenv -ErrorAction SilentlyContinue).Source }
-            Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$pyenvExe`" install $pythonVersion" -Wait -NoNewWindow
-            Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$pyenvExe`" global $pythonVersion" -Wait -NoNewWindow
+            if (-not $pyenvExe) { throw "pyenv executable not found" }
+
+            # Refresh version list before installing
+            Write-ColoredOutput "Updating pyenv version list..." "Cyan"
+            Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$pyenvExe`" update" -Wait -NoNewWindow
+
+            $installProc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$pyenvExe`" install $pythonVersion" -Wait -PassThru -NoNewWindow
+            if ($installProc.ExitCode -ne 0) {
+                throw "pyenv install $pythonVersion failed. Run 'pyenv install --list' to check available versions."
+            }
+            $globalProc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$pyenvExe`" global $pythonVersion" -Wait -PassThru -NoNewWindow
+            if ($globalProc.ExitCode -ne 0) {
+                throw "pyenv global $pythonVersion failed with exit code $($globalProc.ExitCode)"
+            }
+            # Ensure shims are on PATH for current session
+            $pyenvShims = "$pyenvHome\shims"
+            if ($env:Path -notlike "*$pyenvShims*") { $env:Path += ";$pyenvShims" }
             Write-ColoredOutput "Python $pythonVersion set as global default." "Green"
         }
     }

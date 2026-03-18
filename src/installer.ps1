@@ -399,17 +399,27 @@ function Install-Pyenv {
 
         Write-ColoredOutput "pyenv-win installed successfully!" "Green"
 
-        # Install Python version from config
-        Write-ColoredOutput "Installing Python $pythonVersion via pyenv..." "Cyan"
         $pyenvExe = "$pyenvBin\pyenv.bat"
-
         if (-not (Test-Path $pyenvExe)) {
             $pyenvCmd = Get-Command pyenv -ErrorAction SilentlyContinue
             if ($pyenvCmd) { $pyenvExe = $pyenvCmd.Source } else { throw "pyenv executable not found after installation" }
         }
 
-        Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$pyenvExe`" install $pythonVersion" -Wait -NoNewWindow
-        Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$pyenvExe`" global $pythonVersion" -Wait -NoNewWindow
+        # Update pyenv version list before installing so new Python releases are found
+        Write-ColoredOutput "Updating pyenv version list..." "Cyan"
+        Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$pyenvExe`" update" -Wait -NoNewWindow
+
+        # Install Python version from config
+        Write-ColoredOutput "Installing Python $pythonVersion via pyenv..." "Cyan"
+        $installProc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$pyenvExe`" install $pythonVersion" -Wait -PassThru -NoNewWindow
+        if ($installProc.ExitCode -ne 0) {
+            throw "pyenv install $pythonVersion failed with exit code $($installProc.ExitCode). Run 'pyenv install --list' to check available versions."
+        }
+
+        $globalProc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$pyenvExe`" global $pythonVersion" -Wait -PassThru -NoNewWindow
+        if ($globalProc.ExitCode -ne 0) {
+            throw "pyenv global $pythonVersion failed with exit code $($globalProc.ExitCode)"
+        }
 
         Write-ColoredOutput "Python $pythonVersion set as global default via pyenv!" "Green"
         Write-ColoredOutput "You can now use 'pyenv install <version>' and 'pyenv global <version>' to manage Python versions." "Gray"
@@ -424,7 +434,19 @@ function Install-MarkerPdf {
     Write-ColoredOutput "Installing marker-pdf[full]..." "Cyan"
 
     try {
-        $result = pip install "marker-pdf[full]" 2>&1
+        # Resolve python executable - prefer pyenv shim, fall back to PATH
+        $pyenvPython = "$env:USERPROFILE\.pyenv\pyenv-win\shims\python.exe"
+        $pythonExe = if (Test-Path $pyenvPython) {
+            $pyenvPython
+        } else {
+            $cmd = Get-Command python -ErrorAction SilentlyContinue
+            if ($cmd) { $cmd.Source } else { throw "python not found. Ensure pyenv installed Python successfully." }
+        }
+
+        Write-ColoredOutput "Using Python: $pythonExe" "Gray"
+
+        # Use 'python -m pip' to avoid relying on pip shim being on PATH
+        $result = & $pythonExe -m pip install "marker-pdf[full]" 2>&1
         if ($LASTEXITCODE -ne 0) {
             throw "pip install failed with exit code $LASTEXITCODE. Output: $result"
         }
@@ -821,12 +843,6 @@ try {
 
     # Install marker-pdf[full]
     Write-ColoredOutput ""
-    $pipExists = Get-Command pip -ErrorAction SilentlyContinue
-    if (-not $pipExists) {
-        # Refresh PATH so pyenv shims are visible
-        $pyenvShims = "$env:USERPROFILE\.pyenv\pyenv-win\shims"
-        if ($env:Path -notlike "*$pyenvShims*") { $env:Path += ";$pyenvShims" }
-    }
     Install-MarkerPdf
 
     # Install Claude Code

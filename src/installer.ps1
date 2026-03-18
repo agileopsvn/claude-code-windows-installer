@@ -26,6 +26,7 @@ function Get-InstallerConfig {
         if ($Debug) {
             Write-DebugOutput "Node.js version: $($configContent.dependencies.nodejs.version)"
             Write-DebugOutput "Git version: $($configContent.dependencies.git.version)"
+            Write-DebugOutput "Python version: $($configContent.dependencies.python.version)"
             Write-DebugOutput "Context menu icon: $($configContent.installer.contextMenuIcon)"
         }
         return $configContent
@@ -349,6 +350,88 @@ function Install-NodeJS {
     }
     catch {
         throw "Failed to install Node.js via nvm: $($_.Exception.Message)"
+    }
+}
+
+# Function to install pyenv-win and Python
+function Install-Pyenv {
+    $pythonVersion = $script:Config.dependencies.python.version
+    Write-ColoredOutput "Installing pyenv-win (Python Version Manager)..." "Cyan"
+
+    try {
+        $pyenvHome = "$env:USERPROFILE\.pyenv\pyenv-win"
+        $pyenvBin = "$pyenvHome\bin"
+        $pyenvShims = "$pyenvHome\shims"
+        $pyenvInstalled = $false
+
+        # Try winget first
+        $wingetExists = Get-Command winget -ErrorAction SilentlyContinue
+        if ($wingetExists) {
+            Write-ColoredOutput "Installing pyenv-win via winget..." "Cyan"
+            try {
+                $result = Start-Process -FilePath "winget" -ArgumentList "install", "--id", "pyenv-win.pyenv-win", "--accept-source-agreements", "--accept-package-agreements", "--silent" -Wait -PassThru -NoNewWindow
+                if ($result.ExitCode -eq 0) {
+                    $pyenvInstalled = $true
+                    Write-ColoredOutput "pyenv-win installed via winget!" "Green"
+                } else {
+                    Write-ColoredOutput "winget returned exit code $($result.ExitCode), falling back to official install script..." "Yellow"
+                }
+            } catch {
+                Write-ColoredOutput "winget failed: $($_.Exception.Message), falling back to official install script..." "Yellow"
+            }
+        }
+
+        if (-not $pyenvInstalled) {
+            Write-ColoredOutput "Downloading pyenv-win installer..." "Cyan"
+            $installScript = "$env:TEMP\install-pyenv-win.ps1"
+            Invoke-WebRequest -Uri $script:Config.urls.pyenvWinInstall -OutFile $installScript -UseBasicParsing
+            & $installScript
+            if (Test-Path $installScript) { Remove-Item $installScript -Force }
+        }
+
+        # Refresh PATH for current session
+        if ($env:Path -notlike "*$pyenvBin*") {
+            $env:Path += ";$pyenvBin;$pyenvShims"
+        }
+        $env:PYENV = $pyenvHome
+        $env:PYENV_ROOT = $pyenvHome
+        $env:PYENV_HOME = $pyenvHome
+
+        Write-ColoredOutput "pyenv-win installed successfully!" "Green"
+
+        # Install Python version from config
+        Write-ColoredOutput "Installing Python $pythonVersion via pyenv..." "Cyan"
+        $pyenvExe = "$pyenvBin\pyenv.bat"
+
+        if (-not (Test-Path $pyenvExe)) {
+            $pyenvCmd = Get-Command pyenv -ErrorAction SilentlyContinue
+            if ($pyenvCmd) { $pyenvExe = $pyenvCmd.Source } else { throw "pyenv executable not found after installation" }
+        }
+
+        Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$pyenvExe`" install $pythonVersion" -Wait -NoNewWindow
+        Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$pyenvExe`" global $pythonVersion" -Wait -NoNewWindow
+
+        Write-ColoredOutput "Python $pythonVersion set as global default via pyenv!" "Green"
+        Write-ColoredOutput "You can now use 'pyenv install <version>' and 'pyenv global <version>' to manage Python versions." "Gray"
+    }
+    catch {
+        throw "Failed to install pyenv/Python: $($_.Exception.Message)"
+    }
+}
+
+# Function to install marker-pdf[full] via pip
+function Install-MarkerPdf {
+    Write-ColoredOutput "Installing marker-pdf[full]..." "Cyan"
+
+    try {
+        $result = pip install "marker-pdf[full]" 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "pip install failed with exit code $LASTEXITCODE. Output: $result"
+        }
+        Write-ColoredOutput "marker-pdf[full] installed successfully!" "Green"
+    }
+    catch {
+        throw "Failed to install marker-pdf: $($_.Exception.Message)"
     }
 }
 
@@ -708,6 +791,43 @@ try {
             Write-ColoredOutput "Run this manually in PowerShell: Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned" "Yellow"
         }
     }
+
+    # Install pyenv-win and Python
+    Write-ColoredOutput ""
+    $pyenvExists = Get-Command pyenv -ErrorAction SilentlyContinue
+    $pythonVersion = $script:Config.dependencies.python.version
+
+    if (-not $pyenvExists) {
+        Install-Pyenv
+    } else {
+        Write-ColoredOutput "pyenv is already installed." "Green"
+        # Check if the target Python version is already installed and set as global
+        $currentPython = python --version 2>&1
+        if ($currentPython -match [regex]::Escape($pythonVersion)) {
+            Write-ColoredOutput "Python $pythonVersion is already the active version." "Green"
+            if (Get-UserConfirmation "Would you like to reinstall pyenv/Python anyway?" "N") {
+                Install-Pyenv
+            }
+        } else {
+            Write-ColoredOutput "Installing Python $pythonVersion via existing pyenv..." "Cyan"
+            $pyenvHome = "$env:USERPROFILE\.pyenv\pyenv-win"
+            $pyenvExe = "$pyenvHome\bin\pyenv.bat"
+            if (-not (Test-Path $pyenvExe)) { $pyenvExe = (Get-Command pyenv -ErrorAction SilentlyContinue).Source }
+            Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$pyenvExe`" install $pythonVersion" -Wait -NoNewWindow
+            Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$pyenvExe`" global $pythonVersion" -Wait -NoNewWindow
+            Write-ColoredOutput "Python $pythonVersion set as global default." "Green"
+        }
+    }
+
+    # Install marker-pdf[full]
+    Write-ColoredOutput ""
+    $pipExists = Get-Command pip -ErrorAction SilentlyContinue
+    if (-not $pipExists) {
+        # Refresh PATH so pyenv shims are visible
+        $pyenvShims = "$env:USERPROFILE\.pyenv\pyenv-win\shims"
+        if ($env:Path -notlike "*$pyenvShims*") { $env:Path += ";$pyenvShims" }
+    }
+    Install-MarkerPdf
 
     # Install Claude Code
     Write-ColoredOutput ""

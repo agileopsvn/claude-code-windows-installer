@@ -12,6 +12,10 @@
       "version": "2.53.0",
       "minimumVersion": "2.0.0",
       "_comment": "Git for Windows will be downloaded from GitHub releases"
+    },
+    "python": {
+      "version": "3.10.20",
+      "_comment": "Python will be installed via pyenv-win and set as global default"
     }
   },
   
@@ -25,6 +29,7 @@
   "urls": {
     "nvmWindows": "https://github.com/coreybutler/nvm-windows/releases/latest/download/nvm-noinstall.zip",
     "gitBase": "https://github.com/git-for-windows/git/releases/download/v{version}.windows.1/Git-{version}-{arch}.exe",
+    "pyenvWinInstall": "https://raw.githubusercontent.com/pyenv-win/pyenv-win/master/pyenv-win/install-pyenv-win.ps1",
     "_comment": "URL templates. {version} and {arch} will be replaced with actual values during installation"
   }
 }

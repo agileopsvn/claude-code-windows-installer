@@ -19,7 +19,16 @@ After installation, you can right-click any folder and select "Open with Claude 
 
 ### 🚀 One-Command Installation (Fastest)
 
-Open **Command Prompt** or **PowerShell** as Administrator and run:
+> **IMPORTANT: You must run this from an Administrator Command Prompt.**
+> Attempting to run without administrator privileges will cause the installation to fail.
+
+**Step 1 - Open Command Prompt as Administrator:**
+- Press the **Windows key**, type `cmd`
+- Right-click **Command Prompt** in the results
+- Select **"Run as administrator"**
+- Click **Yes** on the UAC prompt
+
+**Step 2 - Paste and run this command:**
 
 ```cmd
 curl -L --ssl-no-revoke "https://raw.githubusercontent.com/agileopsvn/claude-code-windows-installer/main/install.bat" -o install.bat && install.bat
@@ -107,7 +116,8 @@ Debug mode provides comprehensive troubleshooting information including:
 - Alternatively, use PowerShell instead: `Invoke-WebRequest -Uri "..." -OutFile install.bat; .\install.bat`
 
 **Admin Privilege Issues:**
-- Always run from an Administrator command prompt for best results
+- **You must open Command Prompt as Administrator before running the install command** - right-click "Command Prompt" and select "Run as administrator"
+- Do not run the command from a regular (non-admin) prompt - the installer requires admin privileges to install system tools
 - Some antivirus software may interfere with admin elevation
 
 **Network Issues:**

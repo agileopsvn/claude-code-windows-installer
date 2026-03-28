@@ -429,40 +429,6 @@ function Install-Pyenv {
     }
 }
 
-# Function to install marker-pdf[full] via pip
-function Install-MarkerPdf {
-    Write-ColoredOutput "Installing marker-pdf[full]..." "Cyan"
-
-    try {
-        # Resolve python executable - prefer pyenv shim, reject Windows Store stub
-        $pyenvPython = "$env:USERPROFILE\.pyenv\pyenv-win\shims\python.exe"
-        $pythonExe = $null
-        if (Test-Path $pyenvPython) {
-            $pythonExe = $pyenvPython
-        } else {
-            $cmd = Get-Command python -ErrorAction SilentlyContinue
-            if ($cmd -and $cmd.Source -notlike "*WindowsApps*") {
-                $pythonExe = $cmd.Source
-            }
-        }
-        if (-not $pythonExe) {
-            throw "Python not found via pyenv shims. Ensure pyenv installed Python $($script:Config.dependencies.python.version) successfully (check 'pyenv install --list' for available versions)."
-        }
-
-        Write-ColoredOutput "Using Python: $pythonExe" "Gray"
-
-        # Use 'python -m pip' to avoid relying on pip shim being on PATH
-        $result = & $pythonExe -m pip install "marker-pdf[full]" 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            throw "pip install failed with exit code $LASTEXITCODE. Output: $result"
-        }
-        Write-ColoredOutput "marker-pdf[full] installed successfully!" "Green"
-    }
-    catch {
-        throw "Failed to install marker-pdf: $($_.Exception.Message)"
-    }
-}
-
 # Function to install Claude Code
 function Install-ClaudeCode {
     Write-ColoredOutput "Installing Claude Code..." "Cyan"
@@ -861,10 +827,6 @@ try {
             Write-ColoredOutput "Python $pythonVersion set as global default." "Green"
         }
     }
-
-    # Install marker-pdf[full]
-    Write-ColoredOutput ""
-    Install-MarkerPdf
 
     # Install Claude Code
     Write-ColoredOutput ""

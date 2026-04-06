@@ -169,7 +169,7 @@ if "%LOCAL_MODE%"=="false" (
 
 echo.
 echo Installation complete!
-pause
+if "%SILENT_MODE%"=="false" pause
 exit /b 0
 
 :DownloadFile

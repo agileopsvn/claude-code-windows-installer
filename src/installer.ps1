@@ -27,6 +27,7 @@ function Get-InstallerConfig {
             Write-DebugOutput "Node.js version: $($configContent.dependencies.nodejs.version)"
             Write-DebugOutput "Git version: $($configContent.dependencies.git.version)"
             Write-DebugOutput "Python version: $($configContent.dependencies.python.version)"
+            Write-DebugOutput "Pip packages: $($configContent.dependencies.pipPackages.packages -join ', ')"
             Write-DebugOutput "Context menu icon: $($configContent.installer.contextMenuIcon)"
         }
         return $configContent
@@ -353,79 +354,172 @@ function Install-NodeJS {
     }
 }
 
-# Function to install pyenv-win and Python
-function Install-Pyenv {
-    $pythonVersion = $script:Config.dependencies.python.version
-    Write-ColoredOutput "Installing pyenv-win (Python Version Manager)..." "Cyan"
+# Function to install uv and Python
+function Install-UV {
+    Write-ColoredOutput "Installing uv (fast Python package manager)..." "Cyan"
 
     try {
-        $pyenvHome = "$env:USERPROFILE\.pyenv\pyenv-win"
-        $pyenvBin = "$pyenvHome\bin"
-        $pyenvShims = "$pyenvHome\shims"
-        $pyenvInstalled = $false
+        $uvInstalled = $false
 
         # Try winget first
         $wingetExists = Get-Command winget -ErrorAction SilentlyContinue
         if ($wingetExists) {
-            Write-ColoredOutput "Installing pyenv-win via winget..." "Cyan"
+            Write-ColoredOutput "Installing uv via winget..." "Cyan"
             try {
-                $result = Start-Process -FilePath "winget" -ArgumentList "install", "--id", "pyenv-win.pyenv-win", "--accept-source-agreements", "--accept-package-agreements", "--silent" -Wait -PassThru -NoNewWindow
+                $result = Start-Process -FilePath "winget" -ArgumentList "install", "--id", "astral-sh.uv", "--accept-source-agreements", "--accept-package-agreements", "--silent" -Wait -PassThru -NoNewWindow
                 if ($result.ExitCode -eq 0) {
-                    $pyenvInstalled = $true
-                    Write-ColoredOutput "pyenv-win installed via winget!" "Green"
+                    $uvInstalled = $true
+                    Write-ColoredOutput "uv installed via winget!" "Green"
                 } else {
-                    Write-ColoredOutput "winget returned exit code $($result.ExitCode), falling back to official install script..." "Yellow"
+                    Write-ColoredOutput "winget returned exit code $($result.ExitCode), falling back to install script..." "Yellow"
                 }
             } catch {
-                Write-ColoredOutput "winget failed: $($_.Exception.Message), falling back to official install script..." "Yellow"
+                Write-ColoredOutput "winget failed: $($_.Exception.Message), falling back to install script..." "Yellow"
             }
         }
 
-        if (-not $pyenvInstalled) {
-            Write-ColoredOutput "Downloading pyenv-win installer..." "Cyan"
-            $installScript = "$env:TEMP\install-pyenv-win.ps1"
-            Invoke-WebRequest -Uri $script:Config.urls.pyenvWinInstall -OutFile $installScript -UseBasicParsing
-            & $installScript
-            if (Test-Path $installScript) { Remove-Item $installScript -Force }
+        if (-not $uvInstalled) {
+            Write-ColoredOutput "Downloading uv installer from astral.sh..." "Cyan"
+            $uvInstallScript = "$env:TEMP\uv-install.ps1"
+            Invoke-WebRequest -Uri $script:Config.urls.uvInstall -OutFile $uvInstallScript -UseBasicParsing
+            & $uvInstallScript
+            if (Test-Path $uvInstallScript) { Remove-Item $uvInstallScript -Force }
         }
 
-        # Refresh PATH for current session
-        if ($env:Path -notlike "*$pyenvBin*") {
-            $env:Path += ";$pyenvBin;$pyenvShims"
+        # Add uv to PATH for current session
+        $uvDir = "$env:USERPROFILE\.local\bin"
+        if ((Test-Path $uvDir) -and ($env:Path -notlike "*$uvDir*")) {
+            $env:Path += ";$uvDir"
         }
-        $env:PYENV = $pyenvHome
-        $env:PYENV_ROOT = $pyenvHome
-        $env:PYENV_HOME = $pyenvHome
-
-        Write-ColoredOutput "pyenv-win installed successfully!" "Green"
-
-        $pyenvExe = "$pyenvBin\pyenv.bat"
-        if (-not (Test-Path $pyenvExe)) {
-            $pyenvCmd = Get-Command pyenv -ErrorAction SilentlyContinue
-            if ($pyenvCmd) { $pyenvExe = $pyenvCmd.Source } else { throw "pyenv executable not found after installation" }
+        # Also check cargo-style path
+        $uvCargoDir = "$env:USERPROFILE\.cargo\bin"
+        if ((Test-Path $uvCargoDir) -and ($env:Path -notlike "*$uvCargoDir*")) {
+            $env:Path += ";$uvCargoDir"
         }
 
-        # Update pyenv version list before installing so new Python releases are found
-        Write-ColoredOutput "Updating pyenv version list..." "Cyan"
-        Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$pyenvExe`" update" -Wait -NoNewWindow
+        # Verify uv is available
+        $uvCheck = Get-Command uv -ErrorAction SilentlyContinue
+        if (-not $uvCheck) {
+            throw "uv not found on PATH after installation"
+        }
 
-        # Install Python version from config
-        Write-ColoredOutput "Installing Python $pythonVersion via pyenv..." "Cyan"
-        $installProc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$pyenvExe`" install $pythonVersion" -Wait -PassThru -NoNewWindow
+        Write-ColoredOutput "uv installed successfully!" "Green"
+
+        # Install Python via uv
+        $pythonVersion = $script:Config.dependencies.python.version
+        Write-ColoredOutput "Installing Python $pythonVersion via uv..." "Cyan"
+        $installProc = Start-Process -FilePath "uv" -ArgumentList "python", "install", $pythonVersion -Wait -PassThru -NoNewWindow
         if ($installProc.ExitCode -ne 0) {
-            throw "pyenv install $pythonVersion failed with exit code $($installProc.ExitCode). Run 'pyenv install --list' to check available versions."
+            throw "uv python install $pythonVersion failed with exit code $($installProc.ExitCode)"
         }
 
-        $globalProc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$pyenvExe`" global $pythonVersion" -Wait -PassThru -NoNewWindow
-        if ($globalProc.ExitCode -ne 0) {
-            throw "pyenv global $pythonVersion failed with exit code $($globalProc.ExitCode)"
-        }
-
-        Write-ColoredOutput "Python $pythonVersion set as global default via pyenv!" "Green"
-        Write-ColoredOutput "You can now use 'pyenv install <version>' and 'pyenv global <version>' to manage Python versions." "Gray"
+        Write-ColoredOutput "Python $pythonVersion installed via uv!" "Green"
+        Write-ColoredOutput "Use 'uv python list' to see installed versions, 'uv pip install' to install packages." "Gray"
     }
     catch {
-        throw "Failed to install pyenv/Python: $($_.Exception.Message)"
+        throw "Failed to install uv/Python: $($_.Exception.Message)"
+    }
+}
+
+# Function to install Python packages via uv
+function Install-PipPackages {
+    $packages = $script:Config.dependencies.pipPackages.packages -join " "
+    Write-ColoredOutput "Installing Python packages via uv: $packages..." "Cyan"
+
+    try {
+        foreach ($pkg in $script:Config.dependencies.pipPackages.packages) {
+            Write-ColoredOutput "Installing $pkg..." "Cyan"
+            $result = Start-Process -FilePath "uv" -ArgumentList "pip", "install", "--system", $pkg -Wait -PassThru -NoNewWindow
+            if ($result.ExitCode -ne 0) {
+                Write-ColoredOutput "Warning: Failed to install $pkg (exit code $($result.ExitCode))" "Yellow"
+            } else {
+                Write-ColoredOutput "$pkg installed." "Green"
+            }
+        }
+        Write-ColoredOutput "Python packages installed!" "Green"
+    }
+    catch {
+        Write-ColoredOutput "Warning: Some Python packages failed to install: $($_.Exception.Message)" "Yellow"
+    }
+}
+
+# Function to install 1Password CLI
+function Install-OpCli {
+    Write-ColoredOutput "Installing 1Password CLI (op)..." "Cyan"
+
+    try {
+        $opInstalled = $false
+
+        # Try winget first
+        $wingetExists = Get-Command winget -ErrorAction SilentlyContinue
+        if ($wingetExists) {
+            Write-ColoredOutput "Installing 1Password CLI via winget..." "Cyan"
+            try {
+                $result = Start-Process -FilePath "winget" -ArgumentList "install", "--id", "AgileBits.1Password.CLI", "--accept-source-agreements", "--accept-package-agreements", "--silent" -Wait -PassThru -NoNewWindow
+                if ($result.ExitCode -eq 0) {
+                    $opInstalled = $true
+                    Write-ColoredOutput "1Password CLI installed via winget!" "Green"
+                } else {
+                    Write-ColoredOutput "winget returned exit code $($result.ExitCode), falling back to direct download..." "Yellow"
+                }
+            } catch {
+                Write-ColoredOutput "winget failed: $($_.Exception.Message), falling back to direct download..." "Yellow"
+            }
+        }
+
+        if (-not $opInstalled) {
+            # Direct download fallback
+            $arch = if ([Environment]::Is64BitOperatingSystem) { "amd64" } else { "386" }
+            $opZip = "$env:TEMP\op-cli.zip"
+            $installDir = Join-Path -Path $env:ProgramFiles -ChildPath "1Password CLI"
+
+            Write-ColoredOutput "Downloading 1Password CLI..." "Cyan"
+            Invoke-WebRequest -Uri "https://cache.agilebits.com/dist/1P/op2/pkg/v2.32.1/op_windows_${arch}_v2.32.1.zip" -OutFile $opZip -UseBasicParsing
+
+            if (-not (Test-Path $installDir)) {
+                New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+            }
+            Expand-Archive -Path $opZip -DestinationPath $installDir -Force
+
+            # Add to system PATH
+            $envMachinePath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
+            if ($envMachinePath -split ";" -notcontains $installDir) {
+                [Environment]::SetEnvironmentVariable("PATH", "$envMachinePath;$installDir", "Machine")
+            }
+            $env:Path += ";$installDir"
+
+            Remove-Item $opZip -Force
+            Write-ColoredOutput "1Password CLI installed!" "Green"
+        }
+    }
+    catch {
+        Write-ColoredOutput "Warning: 1Password CLI installation failed: $($_.Exception.Message)" "Yellow"
+        Write-ColoredOutput "You can install it manually: winget install AgileBits.1Password.CLI" "Gray"
+    }
+}
+
+# Function to install @anthropic-ai/agent-browser
+function Install-AgentBrowser {
+    Write-ColoredOutput "Installing @anthropic-ai/agent-browser..." "Cyan"
+
+    try {
+        $result = npm install -g @anthropic-ai/agent-browser 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "npm install failed with exit code $LASTEXITCODE"
+        }
+        Write-ColoredOutput "@anthropic-ai/agent-browser installed!" "Green"
+
+        # Install browser (Chrome for Testing)
+        Write-ColoredOutput "Installing browser for agent-browser..." "Cyan"
+        $browserResult = Start-Process -FilePath "npx" -ArgumentList "agent-browser", "install" -Wait -PassThru -NoNewWindow
+        if ($browserResult.ExitCode -eq 0) {
+            Write-ColoredOutput "Browser installed for agent-browser." "Green"
+        } else {
+            Write-ColoredOutput "Warning: Browser install returned exit code $($browserResult.ExitCode). Run 'agent-browser install' manually." "Yellow"
+        }
+    }
+    catch {
+        Write-ColoredOutput "Warning: agent-browser installation failed: $($_.Exception.Message)" "Yellow"
     }
 }
 
@@ -786,45 +880,57 @@ try {
         }
     }
 
-    # Install pyenv-win and Python
+    # Install uv and Python
     Write-ColoredOutput ""
-    $pyenvExists = Get-Command pyenv -ErrorAction SilentlyContinue
+    $uvExists = Get-Command uv -ErrorAction SilentlyContinue
     $pythonVersion = $script:Config.dependencies.python.version
 
-    if (-not $pyenvExists) {
-        Install-Pyenv
+    if (-not $uvExists) {
+        Install-UV
     } else {
-        Write-ColoredOutput "pyenv is already installed." "Green"
-        # Check if the target Python version is already installed and set as global
+        Write-ColoredOutput "uv is already installed." "Green"
+        # Check if the target Python version is installed
         $currentPython = python --version 2>&1
         if ($currentPython -match [regex]::Escape($pythonVersion)) {
-            Write-ColoredOutput "Python $pythonVersion is already the active version." "Green"
-            if (Get-UserConfirmation "Would you like to reinstall pyenv/Python anyway?" "N") {
-                Install-Pyenv
+            Write-ColoredOutput "Python $pythonVersion is already available." "Green"
+            if (Get-UserConfirmation "Would you like to reinstall uv/Python anyway?" "N") {
+                Install-UV
             }
         } else {
-            Write-ColoredOutput "Installing Python $pythonVersion via existing pyenv..." "Cyan"
-            $pyenvHome = "$env:USERPROFILE\.pyenv\pyenv-win"
-            $pyenvExe = "$pyenvHome\bin\pyenv.bat"
-            if (-not (Test-Path $pyenvExe)) { $pyenvExe = (Get-Command pyenv -ErrorAction SilentlyContinue).Source }
-            if (-not $pyenvExe) { throw "pyenv executable not found" }
-
-            # Refresh version list before installing
-            Write-ColoredOutput "Updating pyenv version list..." "Cyan"
-            Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$pyenvExe`" update" -Wait -NoNewWindow
-
-            $installProc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$pyenvExe`" install $pythonVersion" -Wait -PassThru -NoNewWindow
+            Write-ColoredOutput "Installing Python $pythonVersion via uv..." "Cyan"
+            $installProc = Start-Process -FilePath "uv" -ArgumentList "python", "install", $pythonVersion -Wait -PassThru -NoNewWindow
             if ($installProc.ExitCode -ne 0) {
-                throw "pyenv install $pythonVersion failed. Run 'pyenv install --list' to check available versions."
+                throw "uv python install $pythonVersion failed"
             }
-            $globalProc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$pyenvExe`" global $pythonVersion" -Wait -PassThru -NoNewWindow
-            if ($globalProc.ExitCode -ne 0) {
-                throw "pyenv global $pythonVersion failed with exit code $($globalProc.ExitCode)"
-            }
-            # Ensure shims are on PATH for current session
-            $pyenvShims = "$pyenvHome\shims"
-            if ($env:Path -notlike "*$pyenvShims*") { $env:Path += ";$pyenvShims" }
-            Write-ColoredOutput "Python $pythonVersion set as global default." "Green"
+            Write-ColoredOutput "Python $pythonVersion installed via uv." "Green"
+        }
+    }
+
+    # Install Python packages (pymupdf, pandoc, docling) via uv
+    Write-ColoredOutput ""
+    Install-PipPackages
+
+    # Install 1Password CLI
+    Write-ColoredOutput ""
+    $opExists = Get-Command op -ErrorAction SilentlyContinue
+    if (-not $opExists) {
+        Install-OpCli
+    } else {
+        Write-ColoredOutput "1Password CLI (op) is already installed." "Green"
+        if (Get-UserConfirmation "Would you like to reinstall 1Password CLI anyway?" "N") {
+            Install-OpCli
+        }
+    }
+
+    # Install @anthropic-ai/agent-browser
+    Write-ColoredOutput ""
+    $agentBrowserExists = Get-Command agent-browser -ErrorAction SilentlyContinue
+    if (-not $agentBrowserExists) {
+        Install-AgentBrowser
+    } else {
+        Write-ColoredOutput "@anthropic-ai/agent-browser is already installed." "Green"
+        if (Get-UserConfirmation "Would you like to reinstall agent-browser anyway?" "N") {
+            Install-AgentBrowser
         }
     }
 
@@ -913,6 +1019,12 @@ try {
     Write-ColoredOutput ""
     Write-ColoredOutput "Claude Code has been successfully installed!" "Green"
     Write-ColoredOutput ""
+    Write-ColoredOutput "Installed tools:" "White"
+    Write-ColoredOutput "- Git, Node.js (nvm), uv, Python $($script:Config.dependencies.python.version)" "White"
+    Write-ColoredOutput "- Claude Code, @anthropic-ai/agent-browser" "White"
+    Write-ColoredOutput "- 1Password CLI (op)" "White"
+    Write-ColoredOutput "- Python packages: $($script:Config.dependencies.pipPackages.packages -join ', ')" "White"
+    Write-ColoredOutput ""
     Write-ColoredOutput "How to use:" "White"
     if ($contextMenuAdded) {
         Write-ColoredOutput "- Right-click on any project folder and select 'Open with Claude Code'" "White"
@@ -926,32 +1038,36 @@ try {
     Write-ColoredOutput "The first time you open Claude Code, you'll be asked to select a color theme and authenticate." "Yellow"
     Write-ColoredOutput "Select #2 'Billing Account'. Your browser will open to login, use your Orases Google account to authenticate." "Yellow"
     Write-ColoredOutput ""
-    Write-ColoredOutput "Press any key to exit..." "White"
-    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    if (-not $Silent) {
+        Write-ColoredOutput "Press any key to exit..." "White"
+        $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    }
 }
 catch {
     Write-DebugOutput "Installation failed with error: $($_.Exception.Message)"
     Write-DebugOutput "Stack trace: $($_.ScriptStackTrace)"
-    
+
     Write-ColoredOutput ""
     Write-ColoredOutput "========================================" "Red"
     Write-ColoredOutput "    Installation Failed                " "Red"
     Write-ColoredOutput "========================================" "Red"
     Write-ColoredOutput ""
     Write-ColoredOutput "Error: $($_.Exception.Message)" "Red"
-    
+
     if ($Debug) {
         Write-ColoredOutput ""
         Write-ColoredOutput "Debug Information:" "Yellow"
         Write-ColoredOutput "Stack trace: $($_.ScriptStackTrace)" "Gray"
         Write-ColoredOutput "Error details: $($_.Exception | Format-List * | Out-String)" "Gray"
     }
-    
+
     Write-ColoredOutput ""
     Write-ColoredOutput "Please check your internet connection and try again." "Yellow"
     Write-ColoredOutput "If the problem persists, please visit:" "Yellow"
     Write-ColoredOutput "https://github.com/anthropics/claude-code/issues" "Cyan"
     Write-ColoredOutput ""
-    Write-ColoredOutput "Press any key to exit..." "White"
-    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    if (-not $Silent) {
+        Write-ColoredOutput "Press any key to exit..." "White"
+        $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    }
 }

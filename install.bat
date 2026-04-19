@@ -157,7 +157,11 @@ if "%DEBUG_MODE%"=="true" (
     echo [DEBUG] Press any key to continue...
     pause > nul
 )
-PowerShell -NoProfile -ExecutionPolicy Bypass -NoExit -File "!INSTALL_DIR!\src\installer.ps1" !PS_EXTRA!
+if "%DEBUG_MODE%"=="true" (
+    PowerShell -NoProfile -ExecutionPolicy Bypass -NoExit -File "!INSTALL_DIR!\src\installer.ps1" !PS_EXTRA!
+) else (
+    PowerShell -NoProfile -ExecutionPolicy Bypass -File "!INSTALL_DIR!\src\installer.ps1" !PS_EXTRA!
+)
 
 :cleanup
 if "%LOCAL_MODE%"=="false" (
